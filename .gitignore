@@ -1,5 +1,9 @@
 **/.vscode/
 .mypy_cache/
+**.pyc
+**.log
+.venv
+**/.venv
 
 .DS_Store
 

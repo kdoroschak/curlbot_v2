@@ -321,6 +321,14 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use_chardet_on_py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
+name = "schedule"
+version = "1.1.0"
+description = "Job scheduling for humans."
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "tomli"
 version = "2.0.1"
 description = "A lil' TOML parser"
@@ -389,7 +397,7 @@ test = ["websockets"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "f5777c04040b729107a340f372395df4dedde4c446ccdb776d130c158938c7a3"
+content-hash = "006ae924919d2c3360e2c6fa1e4193d34be09020351b6e3019ccf5430fa4e610"
 
 [metadata.files]
 atomicwrites = []
@@ -419,6 +427,7 @@ pyflakes = []
 pytest = []
 pyyaml = []
 requests = []
+schedule = []
 tomli = []
 typing-extensions = []
 update-checker = []
