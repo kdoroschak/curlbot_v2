@@ -1,3 +1,4 @@
+import datetime
 import logging
 import string
 from typing import List, Optional
@@ -44,19 +45,12 @@ def get_op_comments(post: Submission) -> List[Comment]:
     return op_comments
 
 
-def get_op_comments_stripped(post: Submission) -> List[str]:
-    """Get all comments on a post that are authored by the OP of the post, but make them all lowercase and without
-    punctuation.
-
-    Args:
-        post (Submission): post to check for comments
-
-    Returns:
-        List[str]: all of OP's comments as simple strings (lowercase + no punctuation)
-    """
-    op_comments = get_op_comments(post)
-    op_comments_stripped = [strip_text(comment.body) for comment in op_comments]
-    return op_comments_stripped
+def get_all_op_text(post: Submission) -> List[str]:
+    text_body = get_post_body(post)
+    comments = get_op_comments(post)
+    comments_text = [strip_text(comment.body) for comment in comments]
+    op_text = [strip_text(text_body)] + comments_text
+    return op_text
 
 
 def get_new_subreddit_posts(
@@ -99,3 +93,57 @@ def strip_text(text: str) -> str:
     text = text.lower()
     text = text.translate(str.maketrans("", "", string.punctuation))
     return text
+
+
+def post_is_an_image(post: Submission) -> bool:
+    """Returns True if the post contains an image as the main post type (doesn't check for image
+    links in the post body).
+
+    Args:
+        post (Submission): post to check
+
+    Returns:
+        bool: True if image, False otherwise
+    """
+    url = post.url
+    url_ending = url.split(".")[-1]
+
+    if (
+        url_ending in ["jpg", "jpeg", "png"]
+        or "imgur" in url
+        or "v.redd.it" in url
+        or "gallery" in url
+    ):
+        return True
+    else:
+        return False
+
+
+def time_elapsed_since_post(post: Submission) -> float:
+    """Calculate how much time in minutes has elapsed since the post was made.
+
+    Args:
+        post (Submission): post to check
+
+    Returns:
+        float: elapsed time (in minutes) since post creation
+    """
+    post_time = datetime.datetime.utcfromtimestamp(post.created_utc)
+    now = datetime.datetime.utcnow()
+
+    time_since_post = now - post_time
+    logger.debug(f"{time_since_post=}")
+    time_since_post_mins = time_since_post.total_seconds() / 60
+    return time_since_post_mins
+
+
+def add_sticky_comment(post: Submission, comment_text: str) -> None:
+    """Add a sticky comment to a post
+
+    Args:
+        post (Submission): post to add the sticky to
+        comment_text (str): text for the sticky
+    """
+    logger.info(f"Adding sticky comment: {comment_text}")
+    comment = post.reply(comment_text)
+    comment.mod.distinguish(how="yes", sticky=True)

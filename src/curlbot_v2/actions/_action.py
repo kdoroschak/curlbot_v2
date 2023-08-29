@@ -1,10 +1,12 @@
 import logging
+import sqlite3
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Union
+from typing import Any, Dict
 
-import schedule
+import yaml
 from praw.reddit import Subreddit
+from prawcore.exceptions import NotFound
 
 logger = logging.getLogger(__name__)
 
@@ -15,15 +17,38 @@ class BotActionParams(ABC):
 
 
 class BotAction(ABC):
+    _db: sqlite3.Cursor
+    _subreddit: Subreddit
+
+    @abstractmethod
+    def __init__(
+        self,
+        subreddit: Subreddit,
+        db: sqlite3.Cursor,
+    ):
+        pass
+
     @abstractmethod
     def run(self) -> None:
         pass
 
-    def schedule_action(self, frequency_mins: Union[int, float]) -> None:
-        schedule.every(frequency_mins).minutes.do(self.run)
+    def _get_config_from_wiki(self, wiki_page_name: str) -> Dict[str, Any]:
+        try:
+            wiki_page = self._subreddit.wiki[wiki_page_name]
+            content = wiki_page.content_md
+            try:
+                config = yaml.safe_load(content)
+                logger.info(f"CONFIGURATION LOADED (not yet parsed):\n{config}")
+                return config
 
+            except yaml.YAMLError:
+                logger.error(
+                    f"Failed to parse YAML content from the wiki page '{wiki_page_name}='."
+                )
+                raise
 
-class BotActionFactory(ABC):
-    @abstractmethod
-    def get_instance(self, subreddit: Subreddit) -> BotAction:
-        pass
+        except NotFound:
+            logger.error(
+                f"The wiki page '{wiki_page_name}' was not found in the subreddit '{self._subreddit.display_name}'."
+            )
+            raise
