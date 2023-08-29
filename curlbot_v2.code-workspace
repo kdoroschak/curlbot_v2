@@ -29,6 +29,10 @@
 		"files.watcherExclude": {
 			"**/.venv/**": true
 		},
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.black-formatter"
+		},
+		"python.formatting.provider": "none",
 	},
 	"extensions": {"recommendations": ["ms-python.python", "ms-python.vscode-pylance", "njpwerner.autodocstring"]}
 }

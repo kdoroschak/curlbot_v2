@@ -12,9 +12,10 @@ python = "^3.10"
 praw = "^7.7.0"
 PyYAML = "^6.0"
 schedule = "^1.1.0"
+pytz = "^2023.3"
 
 [tool.poetry.dev-dependencies]
-pytest = "^5.2"
+pytest = "^6.2.5"
 black = "^23.1.0"
 mypy = "^1.1.1"
 flake8 = "^6.0.0"
