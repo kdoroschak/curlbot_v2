@@ -1,0 +1,38 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": true,
+			"**/.DS_Store": true,
+			".mypy_cache": true,
+			"**/__pycache__": true
+		},
+		"python.languageServer": "Pylance",
+		"python.terminal.activateEnvironment": false,
+		"python.analysis.typeCheckingMode": "off",
+		"python.linting.pylintEnabled": false,
+		"python.linting.mypyEnabled": true,
+		"python.linting.mypyArgs": [
+			"--follow-imports=silent",
+			"--ignore-missing-imports",
+			"--show-column-numbers",
+			"--no-pretty",
+			"--explicit-package-bases"
+		],
+		"python.linting.flake8Enabled": true,
+		"editor.codeActionsOnSave": {"source.organizeImports": true,},
+		"editor.rulers": [99],
+		"files.watcherExclude": {
+			"**/.venv/**": true
+		},
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.black-formatter"
+		},
+		"python.formatting.provider": "none",
+	},
+	"extensions": {"recommendations": ["ms-python.python", "ms-python.vscode-pylance", "njpwerner.autodocstring"]}
+}
