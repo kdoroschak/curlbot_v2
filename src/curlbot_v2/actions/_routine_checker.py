@@ -613,6 +613,16 @@ class RoutineChecker(BotAction):
         return msg
 
     def _get_post_state_from_database(self, post: Submission) -> PostState:
+        """Looks up the post in the database by id. If it's there, it formats the db data into a
+        PostState object. If it's not there, we'll initialize some info, write it to the db, and
+        return the resulting PostState.
+
+        Args:
+            post (Submission): Post to retrieve from the db
+
+        Returns:
+            PostState: Current state of the post in the database
+        """
         logger.debug(f"Attempting to retrieve post {post.id} from database.")
         db_posts = self._db.execute(
             f"""SELECT * FROM {self._DB_TABLE_NAME} WHERE id=? ORDER BY created_utc DESC""",
@@ -665,6 +675,19 @@ class RoutineChecker(BotAction):
             return post_state
 
     def _check_post(self, post: Submission, previous_post_state: PostState) -> PostState:
+        """Check whether the post needs/has a routine. If not needed, we'll stop further checking.
+        We'll check whether the routine is required regardless of what the status was before -
+        sometimes the flair changes, changing the requirements.
+
+        Args:
+            post (Submission): post to check
+            previous_post_state (PostState): All the info we already had on this post from the db
+
+        Returns:
+            PostState: Post state with updated info, like whether they added their routine since
+                the last check or whether it doesn't need a routine.
+        """
+
         # Check if the post NEEDS a routine. Don't use db flag for this - flair could have changed!
         needs_routine = self._post_needs_routine(post)
         post_state = previous_post_state.update_needs_routine(needs_routine)
@@ -741,7 +764,7 @@ class RoutineChecker(BotAction):
             return False
 
     def _set_up_db(self, db: sqlite3.Cursor, db_table_name: str) -> sqlite3.Cursor:
-        logger.debug("Setting up database connections.")
+        """Create the database table in the given database, or not if it already exists."""
         try:
             logger.debug(f"Creating new table in db, {db_table_name}.")
             db.execute(
@@ -759,6 +782,13 @@ class RoutineChecker(BotAction):
         return db
 
     def _update_db(self, db_post_state: PostState, post_state: PostState) -> None:
+        """Update individual fields in the database. There's probably a better way to do this,
+        but it works (was lifted from the old version mostly.)
+
+        Args:
+            db_post_state (PostState): Prior database state (for comparison to know if it changed)
+            post_state (PostState): Post state with new information to update the db with
+        """
         update_table = f"UPDATE {self._DB_TABLE_NAME}"
         where_id_is = f"WHERE id = '{post_state.post_id}'"
         if (
@@ -788,6 +818,7 @@ class RoutineChecker(BotAction):
             self._db.execute(db_cmd)
 
     def _insert_db(self, post: Submission, post_state: PostState) -> None:
+        # TODO
         row = (
             post_state.post_id,
             post.url,
@@ -809,6 +840,21 @@ class RoutineChecker(BotAction):
         db_conn.commit()
 
     def _post_meets_requirements(self, post: Submission) -> Tuple[bool, Optional[RoutineErrors]]:
+        """Check whether the post meets all the requirements - having a routine, and not cheating
+        (including cheater phrases or being too short). Looks through all the comments from OP and
+        any body text from the post itself. Returns True for the first comment or post that meets
+        the requirements.
+
+        If any comments partly meet the requirements, we'll make a note of the best post so far and
+        keep looking.
+
+        Args:
+            post (Submission): post to check
+
+        Returns:
+            Tuple[bool, Optional[RoutineErrors]]: whether the post meets reqs, and any issues
+                that the post has (too short, avoids routine)
+        """
         op_text = get_all_op_text(post)
         best_so_far = RoutineErrors(avoiding_routine=None, too_short=None, comment=None)
         for comment in op_text:
@@ -828,12 +874,30 @@ class RoutineChecker(BotAction):
         return False, best_so_far
 
     def _text_has_routine(self, text: str) -> bool:
+        """Whether the given text has a routine. Right now this is implemented as checking for
+        keywords, but could be changed to something fancier in the future.
+
+        Args:
+            text (str): text to check for keywords
+
+        Returns:
+            bool: whether the text has any of the keywords
+        """
         for k in self._params.keywords:
             if k in text:
                 return True
         return False
 
     def _text_fulfills_min_length(self, text: str) -> bool:
+        """Whether the text fulfills the minimum character count, if there is one.
+        Probably doesn't need to be its own function but it makes the code more readable.
+
+        Args:
+            text (str): text to check
+
+        Returns:
+            bool: whether the text is longer than the minimum.
+        """
         if (
             self._params.min_routine_characters > 0
             and self._params.min_routine_characters is not None
@@ -843,6 +907,16 @@ class RoutineChecker(BotAction):
             return True
 
     def _text_has_sidesteppers(self, text: str) -> bool:
+        """Whether the given text has any phrases that indicate that they're avoiding writing their
+        routine. Right now this is implemented as checking for keywords, but could be changed to
+        something fancier in the future. Example: "I don't have a routine"
+
+        Args:
+            text (str): text to check for keywords
+
+        Returns:
+            bool: whether the text has any of the sidestepper keywords
+        """
         for cheat in self._params.sidestepping_phrases:
             if cheat in text:
                 return True
