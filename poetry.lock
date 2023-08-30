@@ -79,6 +79,20 @@ optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 
 [[package]]
+name = "coverage"
+version = "7.3.0"
+description = "Code coverage measurement for Python"
+category = "dev"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+tomli = {version = "*", optional = true, markers = "python_full_version <= \"3.11.0a6\" and extra == \"toml\""}
+
+[package.extras]
+toml = ["tomli"]
+
+[[package]]
 name = "flake8"
 version = "6.1.0"
 description = "the modular source code checker: pep8 pyflakes and co"
@@ -293,12 +307,19 @@ toml = "*"
 testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "requests", "xmlschema"]
 
 [[package]]
-name = "pytz"
-version = "2023.3"
-description = "World timezone definitions, modern and historical"
-category = "main"
+name = "pytest-cov"
+version = "4.1.0"
+description = "Pytest plugin for measuring coverage."
+category = "dev"
 optional = false
-python-versions = "*"
+python-versions = ">=3.7"
+
+[package.dependencies]
+coverage = {version = ">=5.2.1", extras = ["toml"]}
+pytest = ">=4.6"
+
+[package.extras]
+testing = ["fields", "hunter", "process-tests", "six", "pytest-xdist", "virtualenv"]
 
 [[package]]
 name = "pyyaml"
@@ -404,7 +425,7 @@ test = ["websockets"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "f03637cfa07f4a0c92c64efe32ff9fd91636f300b0ea1ad62c890472e4664f65"
+content-hash = "cf28321163405735f52bc60f44739f7a89b3588cc6492f6beada484f419e40a6"
 
 [metadata.files]
 atomicwrites = []
@@ -414,6 +435,7 @@ certifi = []
 charset-normalizer = []
 click = []
 colorama = []
+coverage = []
 flake8 = []
 flake8-isort = []
 idna = []
@@ -432,7 +454,7 @@ py = []
 pycodestyle = []
 pyflakes = []
 pytest = []
-pytz = []
+pytest-cov = []
 pyyaml = []
 requests = []
 schedule = []

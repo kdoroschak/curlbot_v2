@@ -1,10 +1,10 @@
 import datetime
 import logging
 import string
-from typing import List, Optional
+from typing import List
 
-from praw.reddit import Comment, Submission, Subreddit
-from prawcore.exceptions import RequestException
+from praw.reddit import Comment, Submission, Subreddit  # type:ignore[import]
+from prawcore.exceptions import RequestException  # type:ignore[import]
 
 logger = logging.getLogger(__name__)
 

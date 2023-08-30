@@ -4,9 +4,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict
 
-import yaml
-from praw.reddit import Subreddit
-from prawcore.exceptions import NotFound
+import yaml  # type:ignore[import]
+from praw.reddit import Subreddit  # type:ignore[import]
+from prawcore.exceptions import NotFound  # type:ignore[import]
 
 logger = logging.getLogger(__name__)
 
