@@ -68,7 +68,7 @@ def get_new_subreddit_posts(
     Returns:
         List[Submission]: List of posts pulled from subreddit
     """
-    logger.info(f"Scanning {max_posts} newest posts of " f"{subreddit.display_name}.")
+    logger.debug(f"Scanning {max_posts} newest posts of " f"{subreddit.display_name}.")
     attempts = 0
     while attempts < max_attempts:
         try:
@@ -132,8 +132,8 @@ def time_elapsed_since_post(post: Submission) -> float:
     now = datetime.datetime.utcnow()
 
     time_since_post = now - post_time
-    logger.debug(f"{time_since_post=}")
     time_since_post_mins = time_since_post.total_seconds() / 60
+    logger.debug(f"{time_since_post_mins=}")
     return time_since_post_mins
 
 
@@ -144,6 +144,6 @@ def add_sticky_comment(post: Submission, comment_text: str) -> None:
         post (Submission): post to add the sticky to
         comment_text (str): text for the sticky
     """
-    logger.info(f"Adding sticky comment: {comment_text}")
+    logger.debug(f"Adding sticky comment: {comment_text}")
     comment = post.reply(comment_text)
     comment.mod.distinguish(how="yes", sticky=True)

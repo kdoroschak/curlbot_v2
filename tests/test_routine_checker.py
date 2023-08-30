@@ -211,11 +211,11 @@ class TestRoutineChecker:
         caplog.set_level("DEBUG")
         # Set up the state of the db entry of the post before calling _remind_report_remove
         post_state = PostState(
-            post_id=123,
+            post_id="123",
             post_in_database=True,
             needs_routine_per_requirements=True,
             has_routine=False,
-            case_closed=True,
+            stop_checking=False,
             reminded_utc=0,
             removed_utc=0,
             reported_utc=0,
@@ -223,10 +223,11 @@ class TestRoutineChecker:
         # Mock utcnow so we can fix what "now" means to the code
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
         # Call _remind_report_remove, which should only modify things related to reminding
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
         assert updated_post_state.reminded_utc > 0  # Verify that we updated the reminded time
         assert post.reply.called  # Verify that reply was called
 
@@ -240,11 +241,11 @@ class TestRoutineChecker:
         caplog.set_level("DEBUG")
         # Set up the state of the db entry of the post before calling _remind_report_remove
         post_state = PostState(
-            post_id=123,
+            post_id="123",
             post_in_database=True,
             needs_routine_per_requirements=True,
             has_routine=False,
-            case_closed=True,
+            stop_checking=False,
             reminded_utc=0,
             removed_utc=0,
             reported_utc=0,
@@ -252,10 +253,11 @@ class TestRoutineChecker:
         # Mock utcnow so we can fix what "now" means to the code
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
         # Call _remind_report_remove, which shouldn't modify anything in this case
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
         assert not post.reply.called  # Verify that reply was not called
         assert updated_post_state.reminded_utc == 0  # Verify that we didn't update the time
         assert post_state == updated_post_state
@@ -270,11 +272,11 @@ class TestRoutineChecker:
         caplog.set_level("DEBUG")
         # Set up the state of the db entry of the post before calling _remind_report_remove
         post_state = PostState(
-            post_id=123,
+            post_id="123",
             post_in_database=True,
             needs_routine_per_requirements=True,
             has_routine=False,
-            case_closed=True,
+            stop_checking=False,
             reminded_utc=0,
             removed_utc=0,
             reported_utc=0,
@@ -282,10 +284,11 @@ class TestRoutineChecker:
         # Mock utcnow so we can fix what "now" means to the code
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
         # Call _remind_report_remove, which should only modify things related to reminding
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
         assert updated_post_state.reported_utc > 0  # Verify that we updated the reported time
         assert post.report.called  # Verify that report was called
 
@@ -299,11 +302,11 @@ class TestRoutineChecker:
         caplog.set_level("DEBUG")
         # Set up the state of the db entry of the post before calling _remind_report_remove
         post_state = PostState(
-            post_id=123,
+            post_id="123",
             post_in_database=True,
             needs_routine_per_requirements=True,
             has_routine=False,
-            case_closed=True,
+            stop_checking=False,
             reminded_utc=0,
             removed_utc=0,
             reported_utc=0,
@@ -311,14 +314,15 @@ class TestRoutineChecker:
         # Mock utcnow so we can fix what "now" means to the code
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
         assert not post.report.called  # Verify that report was not called
         assert updated_post_state.reported_utc == 0  # Verify that we didn't update the time
 
     @patch("curlbot_v2.actions._routine_checker.time_elapsed_since_post", return_value=61)
-    def test_remind_report_remove_case_removal_due(
+    def test_remind_report_remove_case_removal_due_reminder_sent(
         self,
         monkeypatch: MonkeyPatch,
         routine_checker: RoutineChecker,
@@ -327,22 +331,59 @@ class TestRoutineChecker:
         caplog.set_level("DEBUG")
         # Set up the state of the db entry of the post before calling _remind_report_remove
         post_state = PostState(
-            post_id=123,
+            post_id="123",
             post_in_database=True,
             needs_routine_per_requirements=True,
             has_routine=False,
-            case_closed=True,
-            reminded_utc=0,
+            stop_checking=False,
+            reminded_utc=123,  # just has to be > 0 to emulate having already sent a reminder
             removed_utc=0,
             reported_utc=0,
         )
         # Mock utcnow so we can fix what "now" means to the code
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
         # Call _remind_report_remove, which should only modify things related to reminding
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
+        logger.debug(f"{updated_post_state=}")
+        assert updated_post_state.removed_utc > 0  # Verify that we updated the removal time
+        assert post.mod.remove.called  # Verify that remove was called
+
+    @patch("curlbot_v2.actions._routine_checker.time_elapsed_since_post", return_value=61)
+    def test_remind_report_remove_case_removal_due_reminders_off(
+        self,
+        monkeypatch: MonkeyPatch,
+        routine_checker: RoutineChecker,
+        caplog: LogCaptureFixture,
+    ):
+        caplog.set_level("DEBUG")
+        # Set up the state of the db entry of the post before calling _remind_report_remove
+        post_state = PostState(
+            post_id="123",
+            post_in_database=True,
+            needs_routine_per_requirements=True,
+            has_routine=False,
+            stop_checking=False,
+            reminded_utc=0,
+            removed_utc=0,
+            reported_utc=0,
+        )
+        # Turn off reminder
+        params = routine_checker._params.__dict__
+        params["remind_after_mins"] = None
+        routine_checker._params = RoutineCheckerParams(**params)
+        # Mock utcnow so we can fix what "now" means to the code
+        mock_utcnow = MagicMock()
+        monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
+        post = MagicMock(created_utc=1693211427)
+
+        # Call _remind_report_remove, which should only modify things related to reminding
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
+        logger.debug(f"{updated_post_state=}")
         assert updated_post_state.removed_utc > 0  # Verify that we updated the removal time
         assert post.mod.remove.called  # Verify that remove was called
 
@@ -356,11 +397,11 @@ class TestRoutineChecker:
         caplog.set_level("DEBUG")
         # Set up the state of the db entry of the post before calling _remind_report_remove
         post_state = PostState(
-            post_id=123,
+            post_id="123",
             post_in_database=True,
             needs_routine_per_requirements=True,
             has_routine=False,
-            case_closed=True,
+            stop_checking=False,
             reminded_utc=0,
             removed_utc=0,
             reported_utc=0,
@@ -368,9 +409,10 @@ class TestRoutineChecker:
         # Mock utcnow so we can fix what "now" means to the code
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
         assert not post.mod.remove.called  # Verify that remove was not called
         assert updated_post_state.removed_utc == 0  # Verify that we didn't update the time
 
@@ -381,14 +423,26 @@ class TestRoutineChecker:
     ):
         mock_utcnow = MagicMock()
         monkeypatch.setattr(datetime, "datetime", mock_utcnow)
+        mock_utcnow.utcnow.return_value = datetime.datetime(2023, 8, 28, 1, 40, 27, 776743)
         post = MagicMock(created_utc=1693211427)
 
-        post_state = PostState(1693211427, 0, 0, 0, 0, 0, 0, 0)  # Some non-zero values
+        post_state = post_state = PostState(
+            post_id="123",
+            post_in_database=True,
+            needs_routine_per_requirements=True,
+            has_routine=False,
+            stop_checking=False,
+            reminded_utc=0,
+            removed_utc=0,
+            reported_utc=0,
+        )
 
-        updated_post_state = routine_checker._remind_report_remove(post, post_state)
+        updated_post_state = routine_checker._remind_remove_report(post, post_state)
 
         assert updated_post_state == post_state  # Should remain unchanged
         assert not post.reply.called  # Should not call reply
+
+    # TODO test case where stop_checking is True (doesn't matter what other params are set)
 
 
 class TestRoutineErrors:

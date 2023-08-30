@@ -32,7 +32,24 @@ class RoutineCheckerParams(BotActionParams):
     max_posts: int = 100
     reminder_messages_by_flair: Dict[str, str] = field(default_factory=dict)
     ignore_posts_over_age_hours: int = 8
-    # TODO write these messages, develop the format for them in the wiki, and handle reading them
+
+    def __repr__(self) -> str:
+        s = (
+            "RoutineCheckerParams:\n"
+            f"  flair_to_check: {self.flair_to_check}\n"
+            f"  remind_after_mins: {self.remind_after_mins}\n"
+            f"  remove_after_mins: {self.remove_after_mins}\n"
+            f"  report_after_mins: {self.report_after_mins}\n"
+            f"  keywords: {self.keywords}\n"
+            f"  min_routine_characters: {self.min_routine_characters}\n"
+            f"  sidestepping_phrases: {self.sidestepping_phrases}\n"
+            f"  max_posts: {self.max_posts}\n"
+            f"  ignore_posts_over_age_hours: {self.ignore_posts_over_age_hours}\n"
+            f"  reminder_messages_by_flair:\n"
+        )
+        for flair, message in self.reminder_messages_by_flair.items():
+            s += f"    {flair}:\n      {message}"
+        return s
 
 
 @dataclass(frozen=True)
@@ -56,10 +73,50 @@ class PostState:
     post_in_database: bool
     needs_routine_per_requirements: bool
     has_routine: bool
-    case_closed: bool
+    stop_checking: bool
     reminded_utc: int
     removed_utc: int
     reported_utc: int
+
+    def __post_init__(self) -> None:
+        assert type(self.post_id) is str
+        assert type(self.post_in_database) is bool
+        assert type(self.needs_routine_per_requirements) is bool
+        assert type(self.has_routine) is bool
+        assert type(self.stop_checking) is bool
+        assert type(self.reminded_utc) is int
+        assert type(self.removed_utc) is int
+        assert type(self.reported_utc) is int
+
+    def update_needs_routine(self, needs_routine: bool) -> "PostState":
+        vars = self.__dict__
+        vars["needs_routine_per_requirements"] = needs_routine
+        return PostState(**vars)
+
+    def update_has_routine(self, has_routine: bool) -> "PostState":
+        vars = self.__dict__
+        vars["has_routine"] = has_routine
+        return PostState(**vars)
+
+    def update_stop_checking(self, stop_checking: bool) -> "PostState":
+        vars = self.__dict__
+        vars["stop_checking"] = stop_checking
+        return PostState(**vars)
+
+    def update_reminded_utc(self, reminded_utc: int) -> "PostState":
+        vars = self.__dict__
+        vars["reminded_utc"] = reminded_utc
+        return PostState(**vars)
+
+    def update_removed_utc(self, removed_utc: int) -> "PostState":
+        vars = self.__dict__
+        vars["removed_utc"] = removed_utc
+        return PostState(**vars)
+
+    def update_reported_utc(self, reported_utc: int) -> "PostState":
+        vars = self.__dict__
+        vars["reported_utc"] = reported_utc
+        return PostState(**vars)
 
 
 @dataclass
@@ -101,8 +158,8 @@ class RoutineErrors:
 class RoutineChecker(BotAction):
     _params: RoutineCheckerParams
     _subreddit: Subreddit
+    _subreddit_url: str
     _db: sqlite3.Cursor
-    _DB_NAME: str = "routine_checker_db"
     _DB_TABLE_NAME: str = "post_history"
     _WIKI_CONFIG_PAGE: str = "routine_checker_config"
 
@@ -112,43 +169,60 @@ class RoutineChecker(BotAction):
         db: sqlite3.Cursor,
     ) -> None:
         self._subreddit = subreddit
-
-        # Set up the db table for this bot action, within the given db
+        self._subreddit_url = f"https://www.reddit.com/r/{self._subreddit.display_name}"
         self._db = self._set_up_db(db, self._DB_TABLE_NAME)
-        # db_conn = sqlite3.connect(db_name)  # TODO this is how to get db (input to this method)
-        # db = db_conn.cursor()
 
-        # Get the parameters and make sure they're ok to use
-        params = self._get_config_from_wiki(self._WIKI_CONFIG_PAGE)
-        self._validate_config(params)
-        self._params = RoutineCheckerParams(**params)
-        self._validate_flair_messages(
-            self._params.reminder_messages_by_flair, self._params.flair_to_check
-        )
-        logger.info(f"Config loaded and parsed: {self._params}")
-
-        # TODO check to make sure we have messages set for all the flairs!
-        # Each flair in flair_to_check should have a key in reminder_messages_by_flair
-        # This will help catch errors early - AKA at the time you add this action to the bot
+        # Get the parameters from the wiki and make sure they're valid
+        param_dict = self._get_config_from_wiki(self._WIKI_CONFIG_PAGE)
+        self._validate_config(param_dict)
+        self._params = RoutineCheckerParams(**param_dict)
+        self._validate_flair_messages(self._params)
+        logger.info(f"Config loaded and parsed: \n{self._params}")
 
     def run(self) -> None:
         logger.debug("Running RoutineChecker!")
 
+        # Pull the parameters again, so we pick up any changes live
+        param_dict = self._get_config_from_wiki(self._WIKI_CONFIG_PAGE)
+        try:
+            self._validate_config(param_dict)
+            params = RoutineCheckerParams(**param_dict)
+            self._validate_flair_messages(params)
+            self._params = params
+            logger.debug(f"Config loaded and parsed: \n{self._params}")
+        except AssertionError as e:
+            logger.error(f"Issue with the flair messages (not updating params): {e}")
+        except ValueError as e:
+            logger.error(f"Issue with the parameters (not updated): {e}")
+
         posts = get_new_subreddit_posts(self._subreddit, self._params.max_posts)
         for post in posts:
-            post_state = self._check_post(post)
+            previous_post_state = self._get_post_state_from_database(post)
 
-            # Case closed already? keep going
-            if post_state.case_closed:
+            # Case closed already - stop checking this post & move on
+            if previous_post_state.stop_checking:
                 continue
 
-            # See if we need to remind/report/remove
-            new_post_state = self._remind_report_remove(post, post_state)
+            # Check if the post needs a routine (and if we should continue checking this post)
+            new_post_state = self._check_post(post, previous_post_state)
+
+            # Stopped checking this post - update database & move on
+            # We could've stopped checking for several reasons - doesn't need a routine, etc.
+            if new_post_state.stop_checking:
+                self._update_db(previous_post_state, new_post_state)
+                continue
+
+            # If the post needs a routine & doesn't have one
+            if new_post_state.needs_routine_per_requirements and not new_post_state.has_routine:
+                logger.debug(f"{new_post_state=}")
+                # Remind/report/remove if it's time to do so
+                new_post_state = self._remind_remove_report(post, new_post_state)
 
             # Update the database with new info about whether we took action
-            self._update_db(post_state, new_post_state)
+            self._update_db(previous_post_state, new_post_state)
 
     def _validate_config(self, config: Dict[str, Any]) -> None:
+        # TODO maybe make this part of the parameters (making the dict into the object & validating)
         errors = []
         required_params = [
             "flair_to_check",
@@ -228,134 +302,159 @@ class RoutineChecker(BotAction):
             logger.error(e)
             errors.append(e)
 
-        # # Example config dictionary
-        # config_dict = {
-        #     "flair_to_check": ["Routine", None],
-        #     "remind_after_mins": 60,
-        #     "remove_after_mins": None,
-        #     "report_after_mins": 120,
-        #     "keywords": ["routine", "skincare"],
-        #     "min_routine_characters": 10,
-        #     "sidestepping_phrases": ["no routine", "dont have a routine"],
-        #     "max_posts": 100,
-        #     "reminder_messages_by_flair": {"Routine": "Remember to follow your routine!"}
-        # }
-
-        # try:
-        #     validate_config(config_dict)
-        #     print("Config validation successful.")
-        # except (ValueError, TypeError) as e:
-        #     print(f"Config validation failed: {e}")
-
-    def _validate_flair_messages(
-        self, flair_messages: Dict[str, str], flair_to_check: List[str]
-    ) -> None:
-        flair_to_check = set(flair_to_check)
+    def _validate_flair_messages(self, params: RoutineCheckerParams) -> None:
+        flair_messages = params.reminder_messages_by_flair
+        flair_to_check = set(params.flair_to_check)
         flair_with_messages = set(flair_messages.keys())
         assert flair_with_messages.issuperset(flair_to_check)  # TODO better message
 
-    def _remind_report_remove(self, post: Submission, post_state: PostState) -> PostState:
+    def _remind_remove_report(self, post: Submission, post_state: PostState) -> PostState:
+        # Call this on a post when we know it doesn't have a routine yet
         time_since_post_mins = time_elapsed_since_post(post)
-        time_right_now = int(datetime.datetime.utcnow().timestamp())
+        time_right_now_utc = int(datetime.datetime.utcnow().timestamp())
+        remind_after_mins = self._params.remind_after_mins
+        remove_after_mins = self._params.remove_after_mins
+        report_after_mins = self._params.report_after_mins
+        remind_mode_on = remind_after_mins != None and remind_after_mins > 0
+        remove_mode_on = remove_after_mins != None and remove_after_mins > 0
+        report_mode_on = report_after_mins != None and report_after_mins > 0
 
-        """elif needs_action and remind and reminder_due and sent_reminder_utc < 0 and not removal_due:
-            logger.info("REMIND")
-            # Send reminder if...
-            # * The post needs an action (needs a routine and doesn't have one)
-            # * AND the "remind" option is on (kwarg for this function)
-            # * AND it's due for a reminder
-            # * AND we haven't already sent a reminder
-            # * AND it's not yet time to remove it
-            print(f"This one gets a reminder: https://www.reddit.com/r/curlyhair/comments/{post.id}")
-            if flair == "help":
-                add_routine_reminder_comment(post, reminder_msg=reminder_msg_help_flair)
-            elif flair in ["hair victory", "update"]:
-                add_routine_reminder_comment(post, reminder_msg=reminder_msg_victory_flair)
-            else:
-                add_routine_reminder_comment(post, reminder_msg=reminder_msg_no_flair)
-            sent_reminder_utc = (now - datetime.datetime(1970, 1, 1)).total_seconds()
-        elif needs_action and remove and removal_due and removed_utc < 0 and sent_reminder_utc > 0:
-            logger.info("REMOVE")
-            # Remove post if...
-            # * The post needs an action (needs a routine and doesn't have one)
-            # * AND the "remove" option is on (kwarg for this function)
-            # * AND it hasn't already been removed
-            # * AND we already sent a reminder (i.e. don't remove if it bugged out and never sent a reminder)
-            removed_utc = (now - datetime.datetime(1970, 1, 1)).total_seconds()
-            remove_post_for_routine(post, remove_msg=None)
-        elif needs_action and report and removal_due and reported_utc < 0:
-            logger.info("REPORT")
-            # Report post if...
-            # * The post needs an action (needs a routine and doesn't have one)
-            # * AND the "report" option is on (kwarg for this function)
-            # * AND it's due to be removed
-            # * AND it hasn't already been reported
-            
-            if time_since_post > datetime.timedelta(hours=8):
-                # don't report super old stuff
-                pass
-            else:
-                print("I'll report this one!")
-                reported_utc = (now - datetime.datetime(1970, 1, 1)).total_seconds()
-                if op_comment:
-                    msg = ">1hr and *possibly* no routine. (OP commented but there's no \"routine\" keyword.) Please check!"
-                else:
-                    msg = ">1hr and no routine has been posted. (No comments from OP at all). Please check!"
-                report_post_for_routine(post, report_msg=msg)   
+        assert (
+            post_state.stop_checking is False
+        ), "Called _remind_remove_report but it says case closed."
 
-        """
+        stop_checking = False
+        been_too_long = self._post_is_over_time_limit(post)
+        logger.debug(
+            f"REMIND is {'on' if remind_mode_on else 'off'}; "
+            f"REMOVE is {'on' if remove_mode_on else 'off'}; "
+            f"REPORT is {'on' if remove_mode_on else 'off'}"
+        )
+        logger.debug(
+            f"REMIND - {remind_after_mins} mins; "
+            f"REMOVE - {remove_after_mins} mins; "
+            f"REPORT - {report_after_mins} mins"
+        )
 
-        # Remind
-        reminded_utc = 0
-        if self._params.remind_after_mins is not None:
-            remind_time = self._params.remind_after_mins  # TODO handle None
-            if post_state.reminded_utc == 0 and time_since_post_mins > remind_time:
+        # Send reminder if...
+        # * the "remind" option is on
+        # * AND we haven't sent a reminder yet
+        # * AND it's due for a reminder
+        # * AND it's not yet time to remove it
+        # * AND it hasn't been an unfairly long amount of time (at some point, if we missed it we missed it)
+        reminded_utc = post_state.reminded_utc
+        if remind_mode_on:
+            if (
+                reminded_utc <= 0  # We haven't sent a reminder yet
+                and time_since_post_mins > remind_after_mins  # Reminder is due
+                and time_since_post_mins < remove_after_mins  # Removal is NOT due
+                and not been_too_long
+            ):
                 # Send reminder via sticky message
                 sticky_msg = self._get_sticky_message_for_flair(post.link_flair_text)
                 add_sticky_comment(post, sticky_msg)
 
                 # Mark the time we sent the reminder (utc)
-                reminded_utc = time_right_now
+                reminded_utc = time_right_now_utc
+                logger.info(
+                    f"Sent reminder: {self._subreddit_url}/comments/{post.id} (elapsed time: "
+                    f"{time_since_post_mins:0.1f} mins)"
+                )
+            elif (
+                reminded_utc <= 0  # We haven't sent a reminder yet
+                and time_since_post_mins > remind_after_mins  # Reminder is due
+                # and time_since_post_mins < remove_after_mins  # Removal is NOT due
+            ):
                 logger.debug(
-                    f"Sent reminder for this post {post.id} (elapsed time: {time_since_post_mins})"
+                    f"Didn't remind for post {post.id} because removal was due (elapsed time: "
+                    f"{time_since_post_mins:0.1f} mins)"
                 )
             else:
                 logger.debug(
-                    f"Didn't remind for this post {post.id} (elapsed time: {time_since_post_mins})"
+                    f"Didn't remind for post {post.id} (elapsed time: "
+                    f"{time_since_post_mins:0.1f} mins)"
                 )
 
-        # Report
-        reported_utc = 0
-        if self._params.report_after_mins is not None:
-            report_time = self._params.report_after_mins
-            remove_time = self._params.remove_after_mins
-            if post_state.reported_utc == 0 and time_since_post_mins > report_time:
-                report_msg = "TODO report message"  # TODO
-                post.report(report_msg)
-                reported_utc = time_right_now
-                # if self._text_has_sidesteppers(post): change report message
-                # otherwise look up previous report message and use that here
-                # TODO
-            # elif post_state.reported_utc == 0 and remove_time is not None and time_since_post_mins > remove_time:
-
-        # Remove
-        removed_utc = 0
-        if self._params.remove_after_mins is not None:
-            remove_time = self._params.remove_after_mins
-            if post_state.removed_utc == 0 and time_since_post_mins > remove_time:
+        # Remove the post if...
+        # * the "remove" option is on
+        # * it's due to be removed
+        # * it hasn't already been removed
+        # * we sent a reminder (i.e. don't remove if it bugged out and didn't send a reminder)
+        # * it hasn't been an unfairly long time (if we didn't catch it in X hours, that's on us)
+        removed_utc = post_state.removed_utc
+        if remove_mode_on:
+            if (
+                removed_utc <= 0  # We haven't removed it yet
+                and time_since_post_mins > remove_after_mins  # Removal is due
+                and (
+                    reminded_utc > 0 or not remind_mode_on
+                )  # We sent a reminder already (if reminders are on)
+                and not been_too_long  # It hasn't been an unfairly long time
+            ):
                 post.mod.remove()
-                removed_utc = time_right_now
+                removed_utc = time_right_now_utc
+                logger.info(
+                    f"Removed post: {self._subreddit_url}/comments/{post.id} (elapsed time: "
+                    f"{time_since_post_mins:0.1f} mins)"
+                )
+            if been_too_long:
+                logger.debug(
+                    f"Too much time has passed for post {post.id} ({time_since_post_mins:0.1f} mins), "
+                    "but it would've been removed."
+                )
 
-        post_state = PostState(
-            post_id=post_state.post_id,
-            post_in_database=post_state.post_in_database,
-            needs_routine_per_requirements=post_state.needs_routine_per_requirements,
-            has_routine=post_state.has_routine,
-            case_closed=post_state.case_closed,
-            reminded_utc=reminded_utc,
-            removed_utc=removed_utc,
-            reported_utc=reported_utc,
+        # Report the post if...
+        # * the "report" option is on
+        # * it hasn't already been reported
+        # * it's due to be reported
+        # * it hasn't been an unfairly long time
+        reported_utc = post_state.reported_utc
+        if report_mode_on:
+            if (
+                reported_utc <= 0  # We haven't reported it yet
+                and time_since_post_mins > report_after_mins  # Due to be reported
+                and not been_too_long
+            ):
+                logger.info(
+                    f"Reported post: {self._subreddit_url}/comments/{post.id} (elapsed time: "
+                    f"{time_since_post_mins:0.1f} mins)"
+                )
+                op_cms = get_all_op_text(post)
+                if len(op_cms) > 0:
+                    msg = (
+                        f">{time_since_post_mins:0.1f} mins and *possibly* no routine. (OP commented "
+                        "but there's no keyword.) Please check!"
+                    )
+                else:
+                    msg = (
+                        f">{time_since_post_mins:0.1f} mins and no routine has been posted. (No "
+                        "comments from OP at all). Please check!"
+                    )
+                post.report(msg)
+                reported_utc = time_right_now_utc
+
+        # Report the post for manual processing if it's been too long
+        # (Meaning it's past time for any action, but not "too long" to check per the parameter)
+        time_values = [  # Find the longest time from remind/remove/report
+            time
+            for time in [remind_after_mins, remove_after_mins, report_after_mins]
+            if time is not None
+        ]
+        max_time_mins = max(time_values) if time_values else None
+        if time_since_post_mins > max_time_mins and not been_too_long:
+            post.report(f"> {max_time_mins} mins and *possibly* no routine. Please check!")
+            reported_utc = time_right_now_utc
+            stop_checking = True
+        elif time_since_post_mins > max_time_mins:
+            stop_checking = True
+
+        post_state = (
+            post_state.update_stop_checking(stop_checking)
+            .update_reminded_utc(reminded_utc)
+            .update_removed_utc(removed_utc)
+            .update_reported_utc(reported_utc)
         )
+
         return post_state
 
     def _get_sticky_message_for_flair(self, flair: Optional[str]) -> str:
@@ -363,28 +462,34 @@ class RoutineChecker(BotAction):
         return msg
 
     def _get_post_state_from_database(self, post: Submission) -> PostState:
+        logger.debug(f"Attempting to retrieve post {post.id} from database.")
         db_posts = self._db.execute(
             f"""SELECT * FROM {self._DB_TABLE_NAME} WHERE id=? ORDER BY created_utc DESC""",
             (post.id,),
         ).fetchall()
         if len(db_posts) > 1:
-            e = f"More than one post with this id ({post.id}) found in the database (table {self._DB_TABLE_NAME})."
+            # Error state: too many posts in db with this ID
+            e = f">1 post with this id ({post.id}) found in the db (table {self._DB_TABLE_NAME})."
             logger.error(e)
             raise ValueError(e)
         elif len(db_posts) == 0:
+            # Post not in database. Create a PostState object and insert it in the database
             logger.debug(f"Post {post.id} not found in database.")
             post_state = PostState(
                 post_id=post.id,
                 post_in_database=False,
                 needs_routine_per_requirements=False,  # Not meaningful
                 has_routine=False,  # Not meaningful
-                case_closed=False,
-                reminded_utc=0,
-                removed_utc=0,
-                reported_utc=0,
+                stop_checking=False,
+                reminded_utc=-1,
+                removed_utc=-1,
+                reported_utc=-1,
             )
+            self._insert_db(post, post_state)
             return post_state
         else:
+            logger.debug("Found post in database.")
+            # Post is in database. Create a PostState object from the database entry and return it
             (
                 post_id,
                 url,
@@ -399,65 +504,41 @@ class RoutineChecker(BotAction):
             post_state = PostState(
                 post_id,
                 post_in_database=True,
-                needs_routine_per_requirements=needs_routine,
-                has_routine=has_routine,
-                case_closed=case_closed,
+                needs_routine_per_requirements=bool(needs_routine),
+                has_routine=bool(has_routine),
+                stop_checking=bool(case_closed),
                 reminded_utc=reminded_utc,
                 removed_utc=removed_utc,
                 reported_utc=reported_utc,
             )
+            return post_state
 
-    def _check_post(self, post: Submission) -> PostState:
-        # Get the previous database state, or initialize it
-        db_post_state = self._get_post_state_from_database(post)  # TODO maybe don't return none
-        if db_post_state is None:
-            db_post_state = PostState(
-                post.id,
-                post_in_database=False,
-                needs_routine_per_requirements=None,
-                has_routine=False,
-                reminded_utc=-1,
-                removed_utc=-1,
-                reported_utc=-1,
-                case_closed=False,
-            )
-
-        # If we've already marked the "case" as closed, don't keep checking, just return
-        if db_post_state.case_closed:
-            return db_post_state
-
-        # Check if the post is in the database already. If not, we'll add it (below)
-        in_db = db_post_state.post_in_database
-
-        # Check if the post needs a routine. Don't use db flag for this - flair could have changed!
+    def _check_post(self, post: Submission, previous_post_state: PostState) -> PostState:
+        # Check if the post NEEDS a routine. Don't use db flag for this - flair could have changed!
         needs_routine = self._post_needs_routine(post)
+        post_state = previous_post_state.update_needs_routine(needs_routine)
 
-        # Check if the post has a routine
-        post_meets_reqs, errors = self._post_meets_requirements(post)
-        has_routine = db_post_state.has_routine or post_meets_reqs
-        case_closed = True if has_routine else db_post_state.case_closed
+        if needs_routine:
+            # Check if the post HAS a routine / meets requirements
+            if post_state.has_routine:
+                post_meets_reqs = True
+                errors = None
+            else:
+                post_meets_reqs, errors = self._post_meets_requirements(post)
+                post_state = post_state.update_has_routine(post_meets_reqs)
 
-        # If they have the keywords but are trying to cheat, report it and keep checking
-        if errors is not None and errors.avoiding_routine:
-            post.report(errors.summarize_errors())
+            # Check the errors
+            # Special case! Has a routine but trying to cheat - report & keep checking
+            # If they add a real routine eventually, great, the bot will find it.
+            # If they don't add a real routine, the bot will still remove it (if removal is on)
+            if errors is not None and (errors.avoiding_routine or errors.too_short):
+                post.report(errors.summarize_errors())
 
-        # Check if we should close the case based on time elapsed
-        time_window_to_check_post_elapsed = self._post_is_over_time_limit(post)
-        case_closed = True if has_routine or time_window_to_check_post_elapsed else False
-
-        # Create the post state and insert this post into the db if we need to
-        post_state = PostState(
-            post_id=post.id,
-            post_in_database=True,
-            needs_routine_per_requirements=needs_routine,
-            has_routine=has_routine,
-            case_closed=case_closed,
-            reminded_utc=db_post_state.reminded_utc,
-            removed_utc=db_post_state.removed_utc,
-            reported_utc=db_post_state.reported_utc,
-        )
-        if not in_db:
-            self._insert_db(post, post_state)
+            # If the post has a routine, we can mark it to stop checking in the future
+            if post_meets_reqs:
+                post_state = post_state.update_stop_checking(True)
+        else:
+            post_state = post_state.update_stop_checking(True)
         return post_state
 
     def _post_is_over_time_limit(self, post: Submission) -> bool:
@@ -472,28 +553,13 @@ class RoutineChecker(BotAction):
                 post was created, otherwise false
         """
         time_since_post = time_elapsed_since_post(post)
+        ignore_posts_over_age_mins = self._params.ignore_posts_over_age_hours * 60
+        logger.debug(f"{time_since_post=:0.2f} >? {ignore_posts_over_age_mins=:0.2f}")
         # The post is too old overall
-        if time_since_post > self._params.ignore_posts_over_age_hours / 60:
+        if time_since_post > ignore_posts_over_age_mins:
             return True
         else:
             return False
-
-        # # Find the longest time from remind/remove/report
-        # time_values = [
-        #     time
-        #     for time in [
-        #         self._params.remind_after_mins,
-        #         self._params.remove_after_mins,
-        #         self._params.report_after_mins,
-        #     ]
-        #     if time is not None
-        # ]
-        # max_time_mins = max(time_values) if time_values else None
-        # max_time_delta = datetime.timedelta(max_time_mins)
-        # if time_since_post < max_time_delta.total_seconds() / 60:
-        #     return False
-        # else:
-        #     return True
 
     def _post_needs_routine(self, post: Submission) -> bool:
         """Defines the criteria for whether a post needs a routine. Checks flair against the
@@ -542,42 +608,47 @@ class RoutineChecker(BotAction):
         return db
 
     def _update_db(self, db_post_state: PostState, post_state: PostState) -> None:
-        update_table = f"UPDATE {self._DB_NAME}"
-        where_id_is = f"WHERE id = {post_state.post_id}"
+        update_table = f"UPDATE {self._DB_TABLE_NAME}"
+        where_id_is = f"WHERE id = '{post_state.post_id}'"
         if (
             post_state.needs_routine_per_requirements
             != db_post_state.needs_routine_per_requirements
         ):
-            self._db.execute(f"""{update_table} SET needs_routine = ? {where_id_is}""")
+            db_cmd = f"{update_table} SET needs_routine = {int(post_state.needs_routine_per_requirements)} {where_id_is}"
+            logger.debug(db_cmd)
+            self._db.execute(db_cmd)
         elif post_state.has_routine != db_post_state.has_routine:
-            self._db.execute(
-                f"""{update_table} SET has_routine = {post_state.has_routine} {where_id_is}"""
+            db_cmd = (
+                f"{update_table} SET has_routine = {int(post_state.has_routine)} {where_id_is}"
             )
+            logger.debug(db_cmd)
+            self._db.execute(db_cmd)
         elif post_state.reminded_utc != db_post_state.reminded_utc:
-            self._db.execute(
-                f"""{update_table} SET reminded_utc = {post_state.reminded_utc} {where_id_is}"""
-            )
+            db_cmd = f"{update_table} SET reminded_utc = {post_state.reminded_utc} {where_id_is}"
+            logger.debug(db_cmd)
+            self._db.execute(db_cmd)
         elif post_state.removed_utc != db_post_state.removed_utc:
-            self._db.execute(
-                f"""{update_table} SET removed_utc = {post_state.removed_utc} {where_id_is}"""
-            )
+            db_cmd = f"{update_table} SET removed_utc = {post_state.removed_utc} {where_id_is}"
+            logger.debug(db_cmd)
+            self._db.execute(db_cmd)
         elif post_state.reported_utc != db_post_state.reported_utc:
-            self._db.execute(
-                f"""{update_table} SET reported_utc = {post_state.reported_utc} {where_id_is}"""
-            )
+            db_cmd = f"{update_table} SET reported_utc = {post_state.reported_utc} {where_id_is}"
+            logger.debug(db_cmd)
+            self._db.execute(db_cmd)
 
     def _insert_db(self, post: Submission, post_state: PostState) -> None:
         row = (
             post_state.post_id,
             post.url,
             post.created,
-            post_state.needs_routine_per_requirements,
-            post_state.has_routine,
+            int(post_state.needs_routine_per_requirements),
+            int(post_state.has_routine),
             post_state.reminded_utc,
             post_state.removed_utc,
             post_state.reported_utc,
-            post_state.case_closed,
+            int(post_state.stop_checking),
         )
+        logger.debug(f"INSERTING row: {row=}")
         self._db.execute(
             f"""INSERT INTO {self._DB_TABLE_NAME}
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",

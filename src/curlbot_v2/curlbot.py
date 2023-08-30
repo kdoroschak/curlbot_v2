@@ -61,12 +61,12 @@ class CustomModuleFilter(logging.Filter):
         self.module_name = module_name
 
     def filter(self, record):
-        return self.module_name in record.pathname  # .name.startswith(self.module_name)
+        return f"/src/{self.module_name}" in record.pathname  # .name.startswith(self.module_name)
 
 
 if __name__ == "__main__":
     handler = RotatingFileHandler("logs/bot-activity.log", maxBytes=1000000, backupCount=1000)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.INFO)
     formatter = logging.Formatter(
         "%(asctime)s | %(filename)s:%(lineno)d | %(funcName)s | %(levelname)s | %(message)s "
     )
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     handler.addFilter(CustomModuleFilter("curlbot_v2"))
     logger = logging.getLogger()
     logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     schedule.clear()
 
@@ -100,6 +100,10 @@ if __name__ == "__main__":
 
     logger.info("Starting schedule.")
     while True:
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            logger.error(e, exc_info=True)
+            raise e
         logger.debug("Schedule sleeping.")
-        time.sleep(10)  # 10 sec
-        schedule.run_pending()
+        time.sleep(5)  # 10 sec  TODO undo back to more time
