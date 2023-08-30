@@ -4,7 +4,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from praw.reddit import Submission, Subreddit
+from praw.reddit import Submission, Subreddit  # type:ignore[import]
 
 from curlbot_v2._submission_helpers import (
     add_sticky_comment,
@@ -21,7 +21,39 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class RoutineCheckerParams(BotActionParams):
-    # TODO document
+    """Holds parameters for the RoutineChecker bot action.
+
+    These get parsed from the wiki and then dumped into this class to be referenced throughout.
+
+    To make a value None from the wiki, type the string "null" with no quotes.
+
+    Args:
+        flair_to_check (List[Union[str, None]]): List of flair to check. This uses the flair text
+            in the flair configuration, not the css/etc. To check the case where a post has no
+            flair, include None in this list ("null" in the wiki).
+        remind_after_mins (Optional[int]): If a post is missing a routine, add a sticky reminder to
+            the post after this many minutes.
+        remove_after_mins (Optional[int]): If a post is missing a routine, silently remove the post
+            after this many minutes.
+        report_after_mins (Optional[int]): If a post is missing a routine, report it after this
+            many minutes
+        keywords (List[str]): If the post text has any of these keywords, we will say it has a
+            routine. This usually includes "routine", but we also include other words that indicate
+            that someone has put thought into a comment, like "shampoo".
+        min_routine_characters (int, by default 0): The minimum numbers of letters and spaces that
+             must be in someone's routine to call it good enough.
+        sidestepping_phrases (List[str], by default ("don't have a routine", "no routine",
+            "dont have a routine")): If any of these phrases are in the text (and there's no better
+            alternative comment that actually has a routine), we consider the post to be cheating.
+        max_posts (int, by default 100): Maximum number of posts to pull at a time to check. Dial
+            this way down for smaller subreddits with lower post volume.
+        reminder_messages_by_flair (Dict[str, str], by default field(default_factory dict)): Set a
+            specific reminder message for each flair. Although it's a little annoying, each flair
+            has to be specified separately, for now.
+        ignore_posts_over_age_hours (int, by default 8): If the post is over this many hours old,
+            we won't take any action on it. This prevents spam if the bot goes down for a bit, etc.
+    """
+
     flair_to_check: List[Union[str, None]]
     remind_after_mins: Optional[int]
     remove_after_mins: Optional[int]
@@ -55,18 +87,22 @@ class RoutineCheckerParams(BotActionParams):
 @dataclass(frozen=True)
 class PostState:
     """Helper to record a post's state at the time this object was generated.
-    Intentionally can't be updated - use the database for that. This is to avoid passing bools around
-    and avoid accidentally changing the state of a variable.
+
+    Intentionally can't be updated directly - use the update_x() functions for that. This is to
+    control access to these variables (no accidental modification) without having to manually
+    recreate a new PostState each time we want to modify something. This helped me keep things
+    consistent when doing development and I hope it makes it easier for the future.
 
     Args:
         post_id (str): Reddit post ID
         post_in_database (bool): Whether the post is found in the database
         needs_routine_per_requirements (bool): Whether the post requires a routine per the rules
         has_routine (bool): Whether the post has a routine already
-        case_closed (bool): Whether or not we're still checking this post
-        reminded_utc (int): TODO
-        removed_utc (int): TODO
-        reported_utc (int): TODO
+        stop_checking (bool): Whether or not we've stopped checking this post
+        reminded_utc (int): The time at which this post was sent a reminder sticky, as a UTC
+            integer timestamp.
+        removed_utc (int): The time at which this post was removed, as a UTC integer timestamp.
+        reported_utc (int): The time at which this post was reported, as a UTC integer timestamp.
     """
 
     post_id: str
@@ -79,6 +115,7 @@ class PostState:
     reported_utc: int
 
     def __post_init__(self) -> None:
+        """Provides some validation beyond optional type checking."""
         assert type(self.post_id) is str
         assert type(self.post_in_database) is bool
         assert type(self.needs_routine_per_requirements) is bool
@@ -89,31 +126,80 @@ class PostState:
         assert type(self.reported_utc) is int
 
     def update_needs_routine(self, needs_routine: bool) -> "PostState":
+        """Update the field "needs_routine_per_requirements" and return a new copy of this object.
+
+        Args:
+            needs_routine (bool): Whether the post requires a routine per the rules
+
+        Returns:
+            PostState: Same as self, but with an updated field
+        """
         vars = self.__dict__
         vars["needs_routine_per_requirements"] = needs_routine
         return PostState(**vars)
 
     def update_has_routine(self, has_routine: bool) -> "PostState":
+        """Update the field "has_routine" and return a new copy of this object.
+
+        Args:
+            has_routine (bool): Whether the post has a routine already
+
+        Returns:
+            PostState: Same as self, but with an updated field
+        """
         vars = self.__dict__
         vars["has_routine"] = has_routine
         return PostState(**vars)
 
     def update_stop_checking(self, stop_checking: bool) -> "PostState":
+        """Update the field "stop_checking" and return a new copy of this object.
+
+        Args:
+            stop_checking (bool): Whether or not we've stopped checking this post
+
+        Returns:
+            PostState: Same as self, but with an updated field
+        """
         vars = self.__dict__
         vars["stop_checking"] = stop_checking
         return PostState(**vars)
 
     def update_reminded_utc(self, reminded_utc: int) -> "PostState":
+        """Update the field "reminded_utc" and return a new copy of this object.
+
+        Args:
+            reminded_utc (int):The time at which this post was sent a reminder sticky, as a UTC
+                integer timestamp.
+
+        Returns:
+            PostState: Same as self, but with an updated field
+        """
         vars = self.__dict__
         vars["reminded_utc"] = reminded_utc
         return PostState(**vars)
 
     def update_removed_utc(self, removed_utc: int) -> "PostState":
+        """Update the field "removed_utc" and return a new copy of this object.
+
+        Args:
+            removed_utc (int): The time at which this post was removed, as a UTC integer timestamp.
+
+        Returns:
+            PostState: Same as self, but with an updated field
+        """
         vars = self.__dict__
         vars["removed_utc"] = removed_utc
         return PostState(**vars)
 
     def update_reported_utc(self, reported_utc: int) -> "PostState":
+        """Update the field "reported_utc" and return a new copy of this object.
+
+        Args:
+            reported_utc (int):The time at which this post was reported, as a UTC integer timestamp.
+
+        Returns:
+            PostState: Same as self, but with an updated field
+        """
         vars = self.__dict__
         vars["reported_utc"] = reported_utc
         return PostState(**vars)
@@ -121,12 +207,25 @@ class PostState:
 
 @dataclass
 class RoutineErrors:
+    """Class to help keep track of issues with someone's typed out routine, compare which errors
+    are better/worse, and summarizing the errors for a report message.
+
+    This helps add some structure to passing this info around (no lists of errors, etc.) and let us
+    handle different issues separately if needed.
+
+    Args:
+        comment (Optional[str]): The comment this error relates to (likely stripped at this point).
+        avoiding_routine (Optional[bool]): Whether the comment appears to be avoiding the reqs by
+            saying they don't have a routine, etc.
+        too_short (Optional[bool]): Whether the comment is too short.
+    """
+
     comment: Optional[str]
     avoiding_routine: Optional[bool]
     too_short: Optional[bool]
 
     def is_better_than(self, other: "RoutineErrors") -> bool:
-        """Return true if the current (self) object is better than the other object.
+        """Return true if the current object (self) is better than the other object.
 
         Args:
             other (RoutineErrors): another RoutineErrors object
@@ -145,6 +244,13 @@ class RoutineErrors:
         return n_errs_self < n_errs_other
 
     def summarize_errors(self) -> str:
+        """Returh a different error message depending on which errors are set.
+
+        Note that these should be kept short for use as removal reasons.
+
+        Returns:
+            str: _description_
+        """
         if not self.comment:
             return "Missing routine; no comments from OP at all."
         if self.avoiding_routine and self.too_short:
@@ -156,6 +262,8 @@ class RoutineErrors:
 
 
 class RoutineChecker(BotAction):
+    """TODO"""
+
     _params: RoutineCheckerParams
     _subreddit: Subreddit
     _subreddit_url: str
@@ -168,6 +276,14 @@ class RoutineChecker(BotAction):
         subreddit: Subreddit,
         db: sqlite3.Cursor,
     ) -> None:
+        """RoutineChecker TODO checks new image posts in a subreddit to see if they fulfill some criteria.
+
+        Args:
+            subreddit (Subreddit): Instantiated & authenticated subreddit object. (Note: you can
+                get the reddit object from this if needed)
+            db (sqlite3.Cursor): Instantiated database. We'll use a table within this database to
+                track posts over time.
+        """
         self._subreddit = subreddit
         self._subreddit_url = f"https://www.reddit.com/r/{self._subreddit.display_name}"
         self._db = self._set_up_db(db, self._DB_TABLE_NAME)
@@ -180,6 +296,11 @@ class RoutineChecker(BotAction):
         logger.info(f"Config loaded and parsed: \n{self._params}")
 
     def run(self) -> None:
+        """Runs the RoutineChecker logic -- pulls the config from the wiki, checks new posts for
+        routines, and updates the database accordingly.
+
+        No args or return value because this is called by a runner/scheduler automatically.
+        """
         logger.debug("Running RoutineChecker!")
 
         # Pull the parameters again, so we pick up any changes live
@@ -303,10 +424,12 @@ class RoutineChecker(BotAction):
             errors.append(e)
 
     def _validate_flair_messages(self, params: RoutineCheckerParams) -> None:
-        flair_messages = params.reminder_messages_by_flair
-        flair_to_check = set(params.flair_to_check)
-        flair_with_messages = set(flair_messages.keys())
-        assert flair_with_messages.issuperset(flair_to_check)  # TODO better message
+        reminders_on = params.remind_after_mins != None and params.remind_after_mins > 0
+        if reminders_on:
+            flair_messages = params.reminder_messages_by_flair
+            flair_to_check = set(params.flair_to_check)
+            flair_with_messages = set(flair_messages.keys())
+            assert flair_with_messages.issuperset(flair_to_check)  # TODO better message
 
     def _remind_remove_report(self, post: Submission, post_state: PostState) -> PostState:
         # Call this on a post when we know it doesn't have a routine yet
