@@ -424,6 +424,15 @@ class RoutineChecker(BotAction):
             errors.append(e)
 
     def _validate_flair_messages(self, params: RoutineCheckerParams) -> None:
+        """Check that, if reminders are on, each flair we're checking has a canned sticky message
+        set for it. Remember to set one for the empty flair (null in wiki, None here) if needed.
+
+        Args:
+            params (RoutineCheckerParams): Params object that's already been parsed.
+
+        Raises:
+            AssertionError: Raised if not all the flairs in flair_to_check have a message in the dict
+        """
         reminders_on = params.remind_after_mins != None and params.remind_after_mins > 0
         if reminders_on:
             flair_messages = params.reminder_messages_by_flair
@@ -432,7 +441,18 @@ class RoutineChecker(BotAction):
             assert flair_with_messages.issuperset(flair_to_check)  # TODO better message
 
     def _remind_remove_report(self, post: Submission, post_state: PostState) -> PostState:
-        # Call this on a post when we know it doesn't have a routine yet
+        """For the given post, remind, remove, and/or report it if it's due for any of those
+        actions. We'll call this on a post if we know it doesn't have a routine yet, and may need
+        to take some kind of action.
+
+        Args:
+            post (Submission): post that needs reminding/removing/reporting
+            post_state (PostState): history of what's happened with the post (we'll read this and
+                add to it here)
+
+        Returns:
+            PostState: Updated state of the post
+        """
         time_since_post_mins = time_elapsed_since_post(post)
         time_right_now_utc = int(datetime.datetime.utcnow().timestamp())
         remind_after_mins = self._params.remind_after_mins
@@ -581,6 +601,14 @@ class RoutineChecker(BotAction):
         return post_state
 
     def _get_sticky_message_for_flair(self, flair: Optional[str]) -> str:
+        """Get the formatted text of the message we'll apply as a sticky on a post, by flair.
+
+        Args:
+            flair (Optional[str]): flair to retrieve
+
+        Returns:
+            str: markdown-formatted string message
+        """
         msg = self._params.reminder_messages_by_flair.get(flair)
         return msg
 
