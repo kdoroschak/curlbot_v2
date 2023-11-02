@@ -105,7 +105,7 @@ if __name__ == "__main__":
     # )
     # curlbot.remove_bot_action("routine_checker")
 
-    logger.info("Starting schedule.")
+    logger.info("Bot initialized; starting schedule.")
     while True:
         try:
             schedule.run_pending()

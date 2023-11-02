@@ -775,7 +775,7 @@ class RoutineChecker(BotAction):
         except sqlite3.OperationalError as e:
             # We don't want to overwrite the db every time we start the bot
             if "already exists" in str(e):
-                logger.info("Database already exists, no need to initialize.")
+                logger.debug("Database already exists, no need to initialize.")
             else:
                 logger.warning(f"Unknown OperationalError: {e}")
                 raise
