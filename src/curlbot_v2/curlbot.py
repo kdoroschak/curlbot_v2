@@ -89,20 +89,20 @@ if __name__ == "__main__":
     curlbot = CurlBot(praw_ini_site_name="cbot", database_name="curlybot.sqlite3")
 
     # Dummy subreddit for testing
-    # curlbot.add_bot_action(
-    #     job_name="routine_checker",
-    #     action_type=RoutineChecker,
-    #     subreddit_name="curlbot_test",
-    #     frequency_mins=0.5,
-    # )
-
-    # Real subreddit
     curlbot.add_bot_action(
         job_name="routine_checker",
         action_type=RoutineChecker,
-        subreddit_name="curlyhair",
-        frequency_mins=3,
+        subreddit_name="curlbot_test",
+        frequency_mins=0.5,
     )
+
+    # Real subreddit
+    # curlbot.add_bot_action(
+    #     job_name="routine_checker",
+    #     action_type=RoutineChecker,
+    #     subreddit_name="curlyhair",
+    #     frequency_mins=3,
+    # )
     # curlbot.remove_bot_action("routine_checker")
 
     logger.info("Starting schedule.")
