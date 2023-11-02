@@ -293,7 +293,7 @@ class RoutineChecker(BotAction):
         self._validate_config(param_dict)
         self._params = RoutineCheckerParams(**param_dict)
         self._validate_flair_messages(self._params)
-        logger.info(f"Config loaded and parsed: \n{self._params}")
+        logger.debug(f"Config loaded and parsed: \n{self._params}")
 
     def run(self) -> None:
         """Runs the RoutineChecker logic -- pulls the config from the wiki, checks new posts for

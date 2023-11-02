@@ -1,6 +1,20 @@
 # curlbot_v2
 
 
+# Architecture
+
+**TODO** describe Params/Factory/BotAction architecture
+ 
+The way this bot architecture is set up, we can add bot actions on-the-fly without defining them in 
+the bot itself. This makes it more maintainable. This way, the core bot is ONLY responsible for 
+running actions, which all have the same interface (schedule() and run()). The bot also manages
+which subreddit it's running in, the authentication, etc.
+
+Because we're adding actions to the bot on-the-fly, and the bot is responsible for the subreddit
+it's running in, we don't have access to the subreddit object until after we add the `BotAction` to
+the bot. So instead, we use a factory object, which can generate the `BotAction` object by calling 
+`factory.get_instance(subreddit)` with the subreddit.
+
 # Development environment
 
 ## Pyenv
@@ -35,7 +49,7 @@ pyenv install 3.10.10
 
 We use poetry to manage Python package dependencies and virtual environments. The `pyproject.toml` 
 file defines all of the dependencies, and `poetry.lock` resolves the dependency versions and locks
-them so that we can install the exact same package versions every time.
+them to a specific hash so that we can install the exact same package versions every time.
 
 You can think of poetry as a replacement for pip or conda, and the toml/lock files as replacements
 for the requirements files.
@@ -48,11 +62,11 @@ pip3 install poetry
 pyenv shell --unset
 ```
 
-
 ## Direnv
 
 We use direnv to automatically load the poetry virtual environment when you navigate to this project's
-directory. THis helps so you don't have to activate/deactivate any environments yourself, and you
+directory. This helps so you don't have to activate/deactivate any environments yourself, and you
+
 won't accidentally install packages in the wrong environment.
 
 Direnv runs the `.envrc` file in this project.

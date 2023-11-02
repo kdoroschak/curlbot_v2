@@ -38,7 +38,7 @@ class BotAction(ABC):
             content = wiki_page.content_md
             try:
                 config = yaml.safe_load(content)
-                logger.info(f"CONFIGURATION LOADED (not yet parsed):\n{config}")
+                logger.debug(f"CONFIGURATION LOADED (not yet parsed):\n{config}")
                 return config
 
             except yaml.YAMLError:

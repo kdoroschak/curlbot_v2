@@ -38,13 +38,20 @@ class CurlBot:
     def get_subreddit(self, subreddit_name: str) -> praw.reddit.Subreddit:
         return self._reddit.subreddit(subreddit_name)
 
-    # def add_bot_action(self, job_name: str, action: BotAction, frequency_mins: int) -> None:
-    #     job = schedule.every(frequency_mins).minutes.do(action.run)
-    #     self._jobs[job_name] = job
-
     def add_bot_action(
         self, job_name: str, action_type: Type[BotAction], subreddit_name: str, frequency_mins: int
     ) -> None:
+        """Add this job to the queue of things the bot should do.
+
+        Args:
+            job_name (str): Name of the job, so if you want to remove it later, etc. you can
+                retrieve it by name.
+            action_type (Type[BotAction]): The action the bot will be doing
+            subreddit_name (str): Name of the subreddit
+            frequency_mins (int): How often the bot should kick off this job. Note that this is
+                different from any parameters for the job itself. This ONLY makes the bot run this
+                task every `frequency_mins` minutes.
+        """
         subreddit = self.get_subreddit(subreddit_name)
         action = action_type(subreddit, self._db)
         job = schedule.every(frequency_mins).minutes.do(action.run)
@@ -61,7 +68,7 @@ class CustomModuleFilter(logging.Filter):
         self.module_name = module_name
 
     def filter(self, record):
-        return f"/src/{self.module_name}" in record.pathname  # .name.startswith(self.module_name)
+        return f"/src/{self.module_name}" in record.pathname
 
 
 if __name__ == "__main__":
@@ -78,24 +85,24 @@ if __name__ == "__main__":
 
     schedule.clear()
 
-    curlbot = CurlBot(praw_ini_site_name="cbot", database_name="test_db.sqlite3")
+    # Switch database name for testing
+    curlbot = CurlBot(praw_ini_site_name="cbot", database_name="curlybot.sqlite3")
 
-    # TODO replace with method to go get these params from somewhere else (wiki)
-    # routine_checker_params = RoutineCheckerParams(
-    #     flair_to_check=["help"], remind_after_mins=30, remove_after_mins=60, report_after_mins=60
-    # )
-    # routine_checker = RoutineCheckerFactory(routine_checker_params)
-    # Set up database
-
-    # subreddit = curlbot.get_subreddit("curlbot_test")
-    # routine_checker = RoutineChecker(subreddit, curlbot.db)  # TODO don't like this DB conn
-    # curlbot.add_bot_action(routine_checker, 1)
+    # Dummy subreddit for testing
     curlbot.add_bot_action(
         job_name="routine_checker",
         action_type=RoutineChecker,
         subreddit_name="curlbot_test",
-        frequency_mins=0.1,
+        frequency_mins=0.5,
     )
+
+    # Real subreddit
+    # curlbot.add_bot_action(
+    #     job_name="routine_checker",
+    #     action_type=RoutineChecker,
+    #     subreddit_name="curlyhair",
+    #     frequency_mins=3,
+    # )
     # curlbot.remove_bot_action("routine_checker")
 
     logger.info("Starting schedule.")
@@ -106,4 +113,4 @@ if __name__ == "__main__":
             logger.error(e, exc_info=True)
             raise e
         logger.debug("Schedule sleeping.")
-        time.sleep(5)  # 10 sec  TODO undo back to more time
+        time.sleep(10)
