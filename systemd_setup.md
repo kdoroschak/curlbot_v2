@@ -25,5 +25,5 @@ Then do
 
 ```sh
 sudo systemctl enable curlybot
-sudo systemctl start thiliumbot
+sudo systemctl start curlybot
 ```
