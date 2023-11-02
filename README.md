@@ -1,4 +1,3 @@
-
 # curlbot_v2
 
 
@@ -16,7 +15,6 @@ it's running in, we don't have access to the subreddit object until after we add
 the bot. So instead, we use a factory object, which can generate the `BotAction` object by calling 
 `factory.get_instance(subreddit)` with the subreddit.
 
-
 # Development environment
 
 ## Pyenv
@@ -30,6 +28,13 @@ On mac:
 ```sh
 brew install zlib
 brew install pyenv
+```
+
+Then add these lines to your shell startup file (any platform):
+
+```sh
+eval "$(pyenv init -)"
+eval "$(pyenv init --path)"
 ```
 
 ### Install python
@@ -61,6 +66,7 @@ pyenv shell --unset
 
 We use direnv to automatically load the poetry virtual environment when you navigate to this project's
 directory. This helps so you don't have to activate/deactivate any environments yourself, and you
+
 won't accidentally install packages in the wrong environment.
 
 Direnv runs the `.envrc` file in this project.
