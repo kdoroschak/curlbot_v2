@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Type
 import praw
 import schedule
 
-from curlbot_v2.actions import BotAction, RoutineChecker
+from curlbot_v2.actions import BotAction, RoutineChecker, SignOfLife
 
 logger = logging.getLogger()
 
@@ -71,9 +71,9 @@ class CustomModuleFilter(logging.Filter):
         return f"/src/{self.module_name}" in record.pathname
 
 
-if __name__ == "__main__":
+def run():
     handler = RotatingFileHandler("logs/bot-activity.log", maxBytes=1000000, backupCount=1000)
-    handler.setLevel(logging.INFO)
+    handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
         "%(asctime)s | %(filename)s:%(lineno)d | %(funcName)s | %(levelname)s | %(message)s "
     )
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     handler.addFilter(CustomModuleFilter("curlbot_v2"))
     logger = logging.getLogger()
     logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     schedule.clear()
 
@@ -89,11 +89,18 @@ if __name__ == "__main__":
     curlbot = CurlBot(praw_ini_site_name="cbot", database_name="curlybot.sqlite3")
 
     # Dummy subreddit for testing
+    # curlbot.add_bot_action(
+    #     job_name="routine_checker",
+    #     action_type=RoutineChecker,
+    #     subreddit_name="curlbot_test",
+    #     frequency_mins=0.5,
+    # )
+
     curlbot.add_bot_action(
-        job_name="routine_checker",
-        action_type=RoutineChecker,
-        subreddit_name="curlbot_test",
-        frequency_mins=0.5,
+        job_name="send_sign_of_life",
+        action_type=SignOfLife,
+        subreddit_name="u_CurlyBot",
+        frequency_mins=1,
     )
 
     # Real subreddit
@@ -110,6 +117,7 @@ if __name__ == "__main__":
         try:
             schedule.run_pending()
         except Exception as e:
+            logger.error("Threw an error!!!")
             logger.error(e, exc_info=True)
             raise e
         logger.debug("Schedule sleeping.")
