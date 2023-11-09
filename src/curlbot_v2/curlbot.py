@@ -89,18 +89,19 @@ def run():
     curlbot = CurlBot(praw_ini_site_name="cbot", database_name="curlybot.sqlite3")
 
     # Dummy subreddit for testing
-    # curlbot.add_bot_action(
-    #     job_name="routine_checker",
-    #     action_type=RoutineChecker,
-    #     subreddit_name="curlbot_test",
-    #     frequency_mins=0.5,
-    # )
+    curlbot.add_bot_action(
+        job_name="routine_checker",
+        action_type=RoutineChecker,
+        subreddit_name="curlbot_test",
+        frequency_mins=0.5,
+    )
 
+    # Send a sign of life every 60 mins
     curlbot.add_bot_action(
         job_name="send_sign_of_life",
         action_type=SignOfLife,
         subreddit_name="u_CurlyBot",
-        frequency_mins=1,
+        frequency_mins=60,
     )
 
     # Real subreddit
