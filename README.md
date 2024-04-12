@@ -1,19 +1,17 @@
 # curlbot_v2
 
+Curlbot is a reddit moderation bot. Currently, its main task is to make sure that every image post contains some required text providing context for that image. It is responsible for >50% of the moderation actions in the subreddit where it's deployed and dramatically reduced the burden on the mods.
+
+We hoped to expand this bot, so it is written to enable different types of bot actions taken at different frequencies in the same subreddit. However, since Devvit has been introduced as reddit's own bot platform, we'll probably leave it as-is and someday convert to Devvit.
 
 # Architecture
 
 **TODO** describe Params/Factory/BotAction architecture
  
 The way this bot architecture is set up, we can add bot actions on-the-fly without defining them in 
-the bot itself. This makes it more maintainable. This way, the core bot is ONLY responsible for 
+the bot itself, hopefully making it more maintainable. This way, the core bot is ONLY responsible for 
 running actions, which all have the same interface (schedule() and run()). The bot also manages
 which subreddit it's running in, the authentication, etc.
-
-Because we're adding actions to the bot on-the-fly, and the bot is responsible for the subreddit
-it's running in, we don't have access to the subreddit object until after we add the `BotAction` to
-the bot. So instead, we use a factory object, which can generate the `BotAction` object by calling 
-`factory.get_instance(subreddit)` with the subreddit.
 
 # Development environment
 
