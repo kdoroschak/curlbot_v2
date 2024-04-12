@@ -2,7 +2,7 @@ import logging
 import sqlite3
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml  # type:ignore[import]
 from praw.reddit import Subreddit  # type:ignore[import]
@@ -24,7 +24,7 @@ class BotAction(ABC):
     def __init__(
         self,
         subreddit: Subreddit,
-        db: sqlite3.Cursor,
+        db: Optional[sqlite3.Cursor],
     ):
         pass
 

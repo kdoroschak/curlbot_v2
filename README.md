@@ -102,6 +102,13 @@ window, and select the venv python (should be at `.venv/bin/python`)
 
 * Clone the repository.
 * `cd` into the repository
-* Execute `poetry config virtualenvs.in-project true` (tells poetry to install stuff in the `.venv` directory).
 * Execute `poetry install`
 
+
+# Run tests
+
+* `poetry run pytest -vv --cov`
+
+# Run the bot
+
+`poetry run curlbot`

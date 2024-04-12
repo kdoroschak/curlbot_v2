@@ -80,7 +80,7 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7
 
 [[package]]
 name = "coverage"
-version = "7.3.0"
+version = "7.3.2"
 description = "Code coverage measurement for Python"
 category = "dev"
 optional = false
@@ -322,6 +322,14 @@ pytest = ">=4.6"
 testing = ["fields", "hunter", "process-tests", "six", "pytest-xdist", "virtualenv"]
 
 [[package]]
+name = "pytz"
+version = "2023.3.post1"
+description = "World timezone definitions, modern and historical"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "pyyaml"
 version = "6.0.1"
 description = "YAML parser and emitter for Python"
@@ -425,7 +433,7 @@ test = ["websockets"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "cf28321163405735f52bc60f44739f7a89b3588cc6492f6beada484f419e40a6"
+content-hash = "5772c39a8ca018e5cb11e1a4989c1d69720bff824b27202ef9fb37012f38e4e2"
 
 [metadata.files]
 atomicwrites = []
@@ -455,6 +463,7 @@ pycodestyle = []
 pyflakes = []
 pytest = []
 pytest-cov = []
+pytz = []
 pyyaml = []
 requests = []
 schedule = []
