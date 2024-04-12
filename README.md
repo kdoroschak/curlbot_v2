@@ -1,8 +1,11 @@
 # curlbot_v2
 
-Curlbot is a reddit moderation bot. Currently, its main task is to make sure that every image post contains some required text providing context for that image. It is responsible for >50% of the moderation actions in the subreddit where it's deployed and dramatically reduced the burden on the mods.
+Curlbot is a reddit moderation bot. Currently, its main task is to make sure that every image post contains some required text providing context for that image. It is responsible for >50% of the moderation actions in the subreddit where it's deployed (data from May 2023 - April 2024) and dramatically reduced the moderation burden.
 
 We hoped to expand this bot, so it is written to enable different types of bot actions taken at different frequencies in the same subreddit. However, since Devvit has been introduced as reddit's own bot platform, we'll probably leave it as-is and someday convert to Devvit.
+
+I wrote the first version of this bot in 2017 as a jupyter notebook script and rewrote it in 2023 to make it more stable, add features (like showing when the bot was last online, accommodate reddit's new post types, reading from a configuration file in the wiki, etc.), and ideally start generalizing for other subreddits to deploy (as has been requested throughout the years).
+
 
 # Architecture
 
