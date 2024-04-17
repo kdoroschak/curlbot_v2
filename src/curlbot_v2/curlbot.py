@@ -39,21 +39,21 @@ class CurlBot:
         return self._reddit.subreddit(subreddit_name)
 
     def add_bot_action(
-        self, job_name: str, action_type: Type[BotAction], subreddit_name: str, frequency_mins: int
+        self, job_name: str, action: Type[BotAction], subreddit_name: str, frequency_mins: int
     ) -> None:
         """Add this job to the queue of things the bot should do.
 
         Args:
             job_name (str): Name of the job, so if you want to remove it later, etc. you can
                 retrieve it by name.
-            action_type (Type[BotAction]): The action the bot will be doing
+            action (Type[BotAction]): The action the bot will be doing
             subreddit_name (str): Name of the subreddit
             frequency_mins (int): How often the bot should kick off this job. Note that this is
                 different from any parameters for the job itself. This ONLY makes the bot run this
                 task every `frequency_mins` minutes.
         """
         subreddit = self.get_subreddit(subreddit_name)
-        action = action_type(subreddit, self._db)
+        action = action(subreddit, self._db)
         job = schedule.every(frequency_mins).minutes.do(action.run)
         self._jobs[job_name] = job
 
