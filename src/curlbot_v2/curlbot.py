@@ -2,7 +2,7 @@ import logging
 import sqlite3
 import time
 from logging.handlers import RotatingFileHandler
-from typing import Dict, List, Tuple, Type
+from typing import Dict, Type
 
 import praw
 import schedule

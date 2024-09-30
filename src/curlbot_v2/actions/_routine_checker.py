@@ -87,8 +87,23 @@ class RoutineCheckerParams(BotActionParams):
 @dataclass(frozen=True)
 class PostState:
     """Helper to record a post's state at the time this object was generated.
+    Intentionally immutable - use the update_x() functions instead.
 
-    Intentionally can't be updated directly - use the update_x() functions for that. This is to
+    PostState is a helper to bring data to and from the database more nicely.
+    In the RoutineChecker, we're constantly looking at posts to see if there are any
+    changes to its status, like if the OP adds a rule-fulfilling comment to the post, if the
+    post is old enough to be removed if it doesn't meet the rules, etc. Every time we check a post, we'll read its previous PostState
+    from the db, then do some checking and update the db with a new PostState.
+
+
+
+    Since I need to explain this pattern, it probably means it could be improved. But in any
+    case, the PostState isn't meant to keep a running tally of the current state of the post.
+    Instead, it tracks the state at a specific time point.
+    This object is somewhat of a layer between the database and
+    The intended pattern is to create
+    the state at a specific time point. The intended pattern is to create the state,
+    Making PostState mutable would mean a previous state could be altered
     control access to these variables (no accidental modification) without having to manually
     recreate a new PostState each time we want to modify something. This helped me keep things
     consistent when doing development and I hope it makes it easier for the future.
